@@ -1,55 +1,53 @@
 import streamlit as st
-import pandas as pd
-import gspread
 import json
+import gspread
 
-def connect_to_sheet():
-    # 1. Читаем наш JSON из секретов
-    creds_dict = json.loads(st.secrets["google_json"])
-    
-    # 2. ЖЕЛЕЗОБЕТОННАЯ чистка ключа (превращаем текстовые \n в реальные переносы строк)
-    creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
-    
-    # 3. Используем современный встроенный метод gspread (он умнее и проще)
-    client = gspread.service_account_from_dict(creds_dict)
-    
-    return client.open("Rental_Base")
-
-st.set_page_config(page_title="Прокат: Облачная база", layout="wide")
-st.title("🚲 Управление прокатом и складом")
+st.title("🛠 Режим диагностики")
 
 try:
-    google_file = connect_to_sheet()
-    transport_sheet = google_file.get_worksheet(0) 
-    transport_data = transport_sheet.get_all_records()
-    df_transport = pd.DataFrame(transport_data)
+    # Шаг 1: Проверка наличия секрета
+    if "google_json" not in st.secrets:
+        st.error("❌ Секрет 'google_json' не найден в настройках (Manage app -> Settings -> Secrets).")
+        st.stop()
+    st.success("✅ Секрет 'google_json' найден в настройках Streamlit!")
 
-    tab_rent, tab_stock = st.tabs(["📋 Аренда транспорта", "🔧 Склад запчастей"])
+    # Шаг 2: Проверка формата JSON
+    try:
+        raw_text = st.secrets["google_json"]
+        creds_dict = json.loads(raw_text)
+        st.success("✅ Текст успешно расшифрован как структура JSON!")
+    except json.JSONDecodeError as e:
+        st.error(f"❌ Ошибка: Streamlit не смог прочитать JSON. Проверьте лишние кавычки. ({e})")
+        st.stop()
 
-    with tab_rent:
-        st.subheader("Текущий парк транспорта")
-        if not df_transport.empty:
-            st.dataframe(df_transport, use_container_width=True)
-        else:
-            st.info("В таблице 'Rental_Base' нет данных. Проверьте заголовки: Модель, Статус, Цена")
+    # Шаг 3: Проверка ключа
+    if "private_key" not in creds_dict:
+        st.error("❌ Внутри JSON не найдено поле 'private_key'.")
+        st.stop()
+        
+    pk = creds_dict["private_key"]
+    if "\\n" in pk:
+        st.warning("⚠️ Найдены двойные слеши переноса (\\\\n). Исправляем на правильные...")
+        creds_dict["private_key"] = pk.replace("\\n", "\n")
+        st.success("✅ Переносы строк успешно заменены!")
+    elif "\n" not in pk:
+        st.error("❌ Ключ сломан: в нём вообще нет переносов строк (сплошной текст).")
+        st.stop()
+    else:
+        st.success("✅ Формат ключа правильный!")
 
-        with st.sidebar:
-            st.header("➕ Добавить запись")
-            model = st.text_input("Название модели")
-            status = st.selectbox("Текущий статус", ["Свободен", "В аренде", "В ремонте"])
-            price = st.number_input("Стоимость аренды (сутки)", min_value=0, value=500)
-            
-            if st.button("Отправить в Google Таблицу"):
-                if model:
-                    transport_sheet.append_row([model, status, price])
-                    st.success("Готово! Данные отправлены в облако.")
-                    st.rerun()
-                else:
-                    st.warning("Пожалуйста, введите название!")
-
-    with tab_stock:
-        st.subheader("Склад запчастей")
-        st.info("Чтобы здесь появились данные, создайте второй лист в вашей Google Таблице.")
+    # Шаг 4: Попытка авторизации
+    try:
+        st.info("⏳ Пытаемся постучаться в Google...")
+        client = gspread.service_account_from_dict(creds_dict)
+        st.success("✅ Ключ подошел! Успешная авторизация в Google!")
+        
+        # Шаг 5: Поиск таблицы
+        sheet = client.open("Rental_Base")
+        st.success("🎉 ПОБЕДА! Таблица 'Rental_Base' найдена и открыта!")
+        st.balloons()
+    except Exception as e:
+        st.error(f"❌ Ошибка соединения с Google: {e}")
 
 except Exception as e:
-    st.error(f"Ошибка: {e}")
+    st.error(f"❌ Непредвиденная ошибка скрипта: {e}")
