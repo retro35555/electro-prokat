@@ -5,10 +5,10 @@ from oauth2client.service_account import ServiceAccountCredentials
 
 # --- НАСТРОЙКА GOOGLE TABLES ---
 def connect_to_sheet():
-    # Берем данные прямо из Secrets Streamlit
-    creds_info = st.secrets["gcp_service_account"]
+    # Исправленная строка: используем from_json_keyfile_dict
+    creds_info = dict(st.secrets["gcp_service_account"])
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_key_file_dict(creds_info, scope)
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
     client = gspread.authorize(creds)
     return client.open("Rental_Base")
 
@@ -44,7 +44,7 @@ try:
 
     with tab_stock:
         st.subheader("Склад запчастей")
-        st.write("Данные подтягиваются из второго листа таблицы...")
+        st.write("Создайте второй лист в таблице Rental_Base для управления запчастями.")
 
 except Exception as e:
     st.error(f"Ошибка подключения: {e}")
