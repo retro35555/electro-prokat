@@ -2,17 +2,14 @@ import streamlit as st
 import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+import json # Добавили библиотеку для чтения сырого JSON
 
 def connect_to_sheet():
-    # Получаем данные из секретов
-    creds_info = dict(st.secrets["gcp_service_account"])
-    
-    # Исправляем форматирование ключа, если оно сбилось
-    if "private_key" in creds_info:
-        creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
+    # Читаем текст из Secrets и сразу превращаем в рабочий словарь ключей
+    creds_dict = json.loads(st.secrets["google_json"])
     
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
     client = gspread.authorize(creds)
     return client.open("Rental_Base")
 
@@ -31,26 +28,26 @@ try:
         st.subheader("Текущий парк транспорта")
         if not df_transport.empty:
             st.dataframe(df_transport, use_container_width=True)
-            
-            # Добавим возможность удалить или изменить данные позже
         else:
-            st.info("В таблице пока нет данных. Добавьте первый велосипед!")
+            st.info("В таблице 'Rental_Base' нет данных. Проверьте первую строку: Модель, Статус, Цена")
 
         with st.sidebar:
-            st.header("➕ Добавить позицию")
-            model = st.text_input("Модель")
-            status = st.selectbox("Статус", ["Свободен", "В аренде", "В ремонте"])
-            price = st.number_input("Цена в сутки", min_value=0, value=500)
+            st.header("➕ Добавить запись")
+            model = st.text_input("Название модели")
+            status = st.selectbox("Текущий статус", ["Свободен", "В аренде", "В ремонте"])
+            price = st.number_input("Стоимость аренды (сутки)", min_value=0, value=500)
             
-            if st.button("Сохранить"):
+            if st.button("Отправить в Google Таблицу"):
                 if model:
                     transport_sheet.append_row([model, status, price])
-                    st.success("Добавлено в Google Таблицу!")
+                    st.success("Готово! Данные в облаке.")
                     st.rerun()
+                else:
+                    st.warning("Пожалуйста, введите название!")
 
     with tab_stock:
         st.subheader("Склад запчастей")
-        st.write("Чтобы склад заработал, создай второй лист в таблице 'Rental_Base'.")
+        st.info("Чтобы здесь появились данные, создайте второй лист в вашей Google Таблице.")
 
 except Exception as e:
-    st.error(f"Ошибка подключения: {e}")
+    st.error(f"Ошибка: {e}")
