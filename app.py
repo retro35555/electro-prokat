@@ -1,16 +1,18 @@
 import streamlit as st
 import pandas as pd
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-import json # Добавили библиотеку для чтения сырого JSON
+import json
 
 def connect_to_sheet():
-    # Читаем текст из Secrets и сразу превращаем в рабочий словарь ключей
+    # 1. Читаем наш JSON из секретов
     creds_dict = json.loads(st.secrets["google_json"])
     
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-    client = gspread.authorize(creds)
+    # 2. ЖЕЛЕЗОБЕТОННАЯ чистка ключа (превращаем текстовые \n в реальные переносы строк)
+    creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+    
+    # 3. Используем современный встроенный метод gspread (он умнее и проще)
+    client = gspread.service_account_from_dict(creds_dict)
+    
     return client.open("Rental_Base")
 
 st.set_page_config(page_title="Прокат: Облачная база", layout="wide")
@@ -29,7 +31,7 @@ try:
         if not df_transport.empty:
             st.dataframe(df_transport, use_container_width=True)
         else:
-            st.info("В таблице 'Rental_Base' нет данных. Проверьте первую строку: Модель, Статус, Цена")
+            st.info("В таблице 'Rental_Base' нет данных. Проверьте заголовки: Модель, Статус, Цена")
 
         with st.sidebar:
             st.header("➕ Добавить запись")
@@ -40,7 +42,7 @@ try:
             if st.button("Отправить в Google Таблицу"):
                 if model:
                     transport_sheet.append_row([model, status, price])
-                    st.success("Готово! Данные в облаке.")
+                    st.success("Готово! Данные отправлены в облако.")
                     st.rerun()
                 else:
                     st.warning("Пожалуйста, введите название!")
